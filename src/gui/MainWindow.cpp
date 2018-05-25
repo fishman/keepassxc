@@ -58,7 +58,7 @@
 #endif
 
 #include "gui/PasswordGeneratorWidget.h"
-#include "gui/SettingsWidget.h"
+#include "gui/ApplicationSettingsWidget.h"
 
 #include "touchid/TouchID.h"
 
