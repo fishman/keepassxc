@@ -19,6 +19,7 @@
 #define KEEPASSX_PASSWORDKEY_H
 
 #include <QString>
+#include <QSharedPointer>
 
 #include "keys/Key.h"
 
@@ -32,7 +33,7 @@ public:
     QByteArray rawKey() const override;
     void setPassword(const QString& password);
 
-    static PasswordKey fromRawKey(const QByteArray& rawKey);
+    static QSharedPointer<PasswordKey> fromRawKey(const QByteArray& rawKey);
 private:
     QByteArray m_key;
 };

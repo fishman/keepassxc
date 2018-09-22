@@ -32,10 +32,10 @@ PasswordKey::PasswordKey(const QString& password)
     setPassword(password);
 }
 
-PasswordKey PasswordKey::fromRawKey(const QByteArray& rawKey)
+QSharedPointer<PasswordKey> PasswordKey::fromRawKey(const QByteArray& rawKey)
 {
-    PasswordKey result;
-    result.m_key = rawKey;
+    auto result = QSharedPointer<PasswordKey>::create();
+    result->m_key = rawKey;
     return result;
 }
 
