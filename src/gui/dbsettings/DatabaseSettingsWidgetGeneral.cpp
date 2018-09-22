@@ -68,7 +68,7 @@ void DatabaseSettingsWidgetGeneral::initialize()
         m_ui->historyMaxSizeCheckBox->setChecked(false);
     }
 
-    m_ui->dbNameEdit->setFocus();
+    queueFocus(m_ui->dbNameEdit);
 }
 
 void DatabaseSettingsWidgetGeneral::uninitialize()

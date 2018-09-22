@@ -39,6 +39,8 @@ public:
     virtual void load(Database* db);
 
 protected:
+    void queueFocus(QWidget* widget);
+
     QPointer<Database> m_db;
 };
 

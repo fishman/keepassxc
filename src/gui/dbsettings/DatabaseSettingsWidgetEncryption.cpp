@@ -96,6 +96,10 @@ void DatabaseSettingsWidgetEncryption::initialize()
     setupAlgorithmComboBox();
     setupKdfComboBox();
     loadKdfParameters();
+
+    if (markDirty) {
+        queueFocus(m_ui->decryptionTimeSlider);
+    }
 }
 
 void DatabaseSettingsWidgetEncryption::uninitialize()

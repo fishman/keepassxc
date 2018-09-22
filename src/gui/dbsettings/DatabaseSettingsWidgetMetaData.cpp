@@ -41,6 +41,8 @@ void DatabaseSettingWidgetMetaData::initialize()
 
     m_ui->databaseName->setFocus();
     m_ui->databaseName->selectAll();
+
+    queueFocus(m_ui->databaseName);
 }
 
 void DatabaseSettingWidgetMetaData::uninitialize()

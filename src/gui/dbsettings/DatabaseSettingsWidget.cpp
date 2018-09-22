@@ -19,6 +19,7 @@
 #include "core/Database.h"
 
 #include <QWidget>
+#include <QTimer>
 
 DatabaseSettingsWidget::DatabaseSettingsWidget(QWidget* parent)
     : SettingsWidget(parent)
@@ -39,4 +40,25 @@ void DatabaseSettingsWidget::load(Database* db)
 {
     m_db = db;
     initialize();
+}
+
+/**
+ * Queue a focus change to the specified element to be executed
+ * in the next event loop iteration.
+ *
+ * @param widget widget to be focused
+ */
+void DatabaseSettingsWidget::queueFocus(QWidget* widget)
+{
+    // ugly verbose code needed for compatibility with Qt < 5.4,
+    // see https://bugreports.qt.io/browse/QTBUG-26406
+    auto* timer = new QTimer(this);
+    timer->setSingleShot(true);
+    connect(timer, &QTimer::timeout, [=]() {
+        if (widget) {
+            widget->setFocus();
+        }
+        timer->deleteLater();
+    });
+    timer->start(0);
 }
