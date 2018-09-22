@@ -49,7 +49,6 @@ DatabaseSettingsDialog::DatabaseSettingsDialog(QWidget* parent)
     m_ui->stackedWidget->setCurrentIndex(0);
     m_securityTabWidget->setCurrentIndex(0);
 
-    connect(m_ui->stackedWidget, SIGNAL(currentIndexChanged(int)), SLOT(pageChanged()));
     connect(m_securityTabWidget, SIGNAL(currentChanged(int)),  SLOT(pageChanged()));
     connect(m_ui->categoryList, SIGNAL(categoryChanged(int)), m_ui->stackedWidget, SLOT(setCurrentIndex(int)));
     connect(m_ui->advancedSettingsToggle, SIGNAL(toggled(bool)), SLOT(toggleAdvancedMode(bool)));

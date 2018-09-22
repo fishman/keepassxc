@@ -48,6 +48,11 @@
 #include "crypto/Crypto.h"
 #include "crypto/kdf/AesKdf.h"
 #include "format/KeePass2Reader.h"
+#include "keys/PasswordKey.h"
+#include "keys/FileKey.h"
+#include "gui/ApplicationSettingsWidget.h"
+#include "gui/dbsettings/DatabaseSettingsDialog.h"
+#include "gui/CategoryListWidget.h"
 #include "gui/CloneDialog.h"
 #include "gui/DatabaseTabWidget.h"
 #include "gui/DatabaseWidget.h"
@@ -63,6 +68,8 @@
 #include "gui/group/EditGroupWidget.h"
 #include "gui/group/GroupModel.h"
 #include "gui/group/GroupView.h"
+#include "gui/wizard/NewDatabaseWizard.h"
+#include "gui/masterkey/KeyComponentWidget.h"
 #include "keys/PasswordKey.h"
 
 void TestGui::initTestCase()
@@ -70,9 +77,11 @@ void TestGui::initTestCase()
     QVERIFY(Crypto::init());
     Config::createTempFileInstance();
     // Disable autosave so we can test the modified file indicator
-    Config::instance()->set("AutoSaveAfterEveryChange", false);
+    config()->set("AutoSaveAfterEveryChange", false);
     // Enable the tray icon so we can test hiding/restoring the window
-    Config::instance()->set("GUI/ShowTrayIcon", true);
+    config()->set("GUI/ShowTrayIcon", true);
+    // Disable advanced settings mode (activate within individual tests to test advanced settings)
+    config()->set("GUI/AdvancedSettings", false);
 
     m_mainWindow = new MainWindow();
     m_tabWidget = m_mainWindow->findChild<DatabaseTabWidget*>("tabWidget");
@@ -135,43 +144,107 @@ void TestGui::cleanup()
     m_dbWidget = nullptr;
 }
 
+void TestGui::testSettingsDefaultTabOrder()
+{
+    // check application settings default tab order
+    triggerAction("actionSettings");
+    auto* settingsWidget = m_mainWindow->findChild<ApplicationSettingsWidget*>();
+    QVERIFY(settingsWidget->isVisible());
+    QCOMPARE(settingsWidget->findChild<CategoryListWidget*>("categoryList")->currentCategory(), 0);
+    for (auto* w: settingsWidget->findChildren<QTabWidget*>()) {
+        if (w->currentIndex() != 0) {
+            QFAIL("Application settings contain QTabWidgets whose default index is not 0");
+        }
+    }
+    QTest::keyClick(settingsWidget, Qt::Key::Key_Escape);
+
+    // check database settings default tab order
+    triggerAction("actionChangeDatabaseSettings");
+    auto* dbSettingsWidget = m_mainWindow->findChild<DatabaseSettingsDialog*>();
+    QVERIFY(dbSettingsWidget->isVisible());
+    QCOMPARE(dbSettingsWidget->findChild<CategoryListWidget*>("categoryList")->currentCategory(), 0);
+    for (auto* w: dbSettingsWidget->findChildren<QTabWidget*>()) {
+        if (w->currentIndex() != 0) {
+            QFAIL("Database settings contain QTabWidgets whose default index is not 0");
+        }
+    }
+    QTest::keyClick(dbSettingsWidget, Qt::Key::Key_Escape);
+}
+
 void TestGui::testCreateDatabase()
 {
-    QTemporaryFile tmpFile;
-    QVERIFY(tmpFile.open());
-    QString tmpFileName = tmpFile.fileName();
-    tmpFile.remove();
-
-    fileDialog()->setNextFileName(tmpFileName);
+    QTimer::singleShot(0, this, SLOT(createDatabaseCallback()));
     triggerAction("actionDatabaseNew");
 
-    DatabaseWidget* dbWidget = m_tabWidget->currentDatabaseWidget();
-
-    QWidget* databaseNewWidget = dbWidget->findChild<QWidget*>("changeMasterKeyWidget");
-    PasswordEdit* editPassword = databaseNewWidget->findChild<PasswordEdit*>("enterPasswordEdit");
-    QVERIFY(editPassword->isVisible());
-
-    QLineEdit* editPasswordRepeat = databaseNewWidget->findChild<QLineEdit*>("repeatPasswordEdit");
-    QVERIFY(editPasswordRepeat->isVisible());
-
-    m_tabWidget->currentDatabaseWidget()->setCurrentWidget(databaseNewWidget);
-
-    QTest::keyClicks(editPassword, "test");
-    QTest::keyClicks(editPasswordRepeat, "test");
-    QTest::keyClick(editPasswordRepeat, Qt::Key_Enter);
-
-    // Auto-save after every change is enabled by default, ensure the db saves right away
-    QTRY_VERIFY(m_tabWidget->tabText(m_tabWidget->currentIndex()).contains("*"));
-
-    m_db = m_tabWidget->currentDatabaseWidget()->database();
-
     // there is a new empty db
+    m_db = m_tabWidget->currentDatabaseWidget()->database();
     QCOMPARE(m_db->rootGroup()->children().size(), 0);
+
+    // check meta data
+    QCOMPARE(m_db->metadata()->name(), QString("Test Name"));
+    QCOMPARE(m_db->metadata()->description(), QString("Test Description"));
+
+    // check key and encryption
+    QCOMPARE(m_db->key()->keys().size(), 2);
+    QCOMPARE(m_db->kdf()->uuid(), KeePass2::KDF_ARGON2);
+    QCOMPARE(m_db->cipher(), KeePass2::CIPHER_AES);
+    auto compositeKey = QSharedPointer<CompositeKey>::create();
+    compositeKey->addKey(QSharedPointer<PasswordKey>::create("test"));
+    auto fileKey = QSharedPointer<FileKey>::create();
+    fileKey->load(QString("%1/%2").arg(QString(KEEPASSX_TEST_DATA_DIR), "FileKeyHashed.key"));
+    compositeKey->addKey(fileKey);
+    QCOMPARE(m_db->key()->rawKey(), compositeKey->rawKey());
 
     // close the new database
     MessageBox::setNextAnswer(QMessageBox::No);
     triggerAction("actionDatabaseClose");
-    Tools::wait(100);
+}
+
+void TestGui::createDatabaseCallback()
+{
+    auto* wizard = m_tabWidget->findChild<NewDatabaseWizard*>();
+    QVERIFY(wizard);
+
+    QTest::keyClicks(wizard->currentPage()->findChild<QLineEdit*>("databaseName"), "Test Name");
+    QTest::keyClicks(wizard->currentPage()->findChild<QLineEdit*>("databaseDescription"), "Test Description");
+    QCOMPARE(wizard->currentId(), 0);
+
+    QTest::keyClick(wizard, Qt::Key_Enter);
+    QCOMPARE(wizard->currentId(), 1);
+
+    QTest::keyClick(wizard, Qt::Key_Enter);
+    QCOMPARE(wizard->currentId(), 2);
+
+    // enter password
+    auto componentWidgets = wizard->currentPage()->findChildren<KeyComponentWidget*>();
+    QTest::keyClick(componentWidgets[0]->findChild<QPushButton*>("addButton"), Qt::Key::Key_Enter);
+    auto* passwordEdit = componentWidgets[0]->findChild<QLineEdit*>("enterPasswordEdit");
+    auto* passwordRepeatEdit = componentWidgets[0]->findChild<QLineEdit*>("repeatPasswordEdit");
+    QApplication::processEvents();
+    QVERIFY(passwordEdit->isVisible());
+    QVERIFY(passwordEdit->hasFocus());
+    QTest::keyClicks(passwordEdit, "test");
+    QTest::keyClick(passwordEdit, Qt::Key::Key_Tab);
+    QTest::keyClicks(passwordRepeatEdit, "test");
+
+    // add key file
+    fileDialog()->setNextFileName(QString("%1/%2").arg(QString(KEEPASSX_TEST_DATA_DIR), "FileKeyHashed.key"));
+    QTest::keyClick(componentWidgets[1]->findChild<QPushButton*>("addButton"), Qt::Key::Key_Enter);
+    auto* fileCombo = componentWidgets[1]->findChild<QComboBox*>("keyFileCombo");
+    QApplication::processEvents();
+    QVERIFY(fileCombo->isVisible());
+    QVERIFY(fileCombo->hasFocus());
+    auto* browseButton = componentWidgets[1]->findChild<QPushButton*>("browseKeyFileButton");
+    QTest::keyClick(browseButton, Qt::Key::Key_Enter);
+    QCOMPARE(fileCombo->currentText(), QString("%1/%2").arg(QString(KEEPASSX_TEST_DATA_DIR), "FileKeyHashed.key"));
+
+    // save database to temporary file
+    TemporaryFile tmpFile;
+    QVERIFY(tmpFile.open());
+    tmpFile.close();
+    fileDialog()->setNextFileName(tmpFile.filePath());
+
+    QTest::keyClick(fileCombo, Qt::Key::Key_Enter);
 }
 
 void TestGui::testMergeDatabase()
@@ -390,7 +463,7 @@ void TestGui::testSearchEditEntry()
 
     // Find buttons for group creation
     EditGroupWidget* editGroupWidget = m_dbWidget->findChild<EditGroupWidget*>("editGroupWidget");
-    QLineEdit* nameEdit = editGroupWidget->findChild<QLineEdit*>("nameEdit");
+    QLineEdit* nameEdit = editGroupWidget->findChild<QLineEdit*>("editName");
     QDialogButtonBox* editGroupWidgetButtonBox = editGroupWidget->findChild<QDialogButtonBox*>("buttonBox");
 
     // Add groups "Good" and "Bad"
@@ -965,7 +1038,7 @@ void TestGui::testSaveAs()
     QFileInfo fileInfo(m_dbFilePath);
     QDateTime lastModified = fileInfo.lastModified();
 
-    m_db->metadata()->setName("SaveAs");
+    m_db->metadata()->setName("testSaveAs");
 
     // open temporary file so it creates a filename
     QTemporaryFile tmpFile;
@@ -977,7 +1050,7 @@ void TestGui::testSaveAs()
 
     triggerAction("actionDatabaseSaveAs");
 
-    QCOMPARE(m_tabWidget->tabText(m_tabWidget->currentIndex()), QString("SaveAs"));
+    QCOMPARE(m_tabWidget->tabText(m_tabWidget->currentIndex()), QString("testSaveAs"));
 
     checkDatabase(tmpFileName);
 
@@ -987,31 +1060,40 @@ void TestGui::testSaveAs()
 
 void TestGui::testSave()
 {
-    m_db->metadata()->setName("Save");
+    m_db->metadata()->setName("testSave");
+
     // wait for modified timer
-    QTRY_COMPARE(m_tabWidget->tabText(m_tabWidget->currentIndex()), QString("Save*"));
+    QTRY_COMPARE(m_tabWidget->tabText(m_tabWidget->currentIndex()), QString("testSave*"));
 
     triggerAction("actionDatabaseSave");
-    QCOMPARE(m_tabWidget->tabText(m_tabWidget->currentIndex()), QString("Save"));
+    QCOMPARE(m_tabWidget->tabText(m_tabWidget->currentIndex()), QString("testSave"));
 
     checkDatabase();
 }
 
 void TestGui::testDatabaseSettings()
 {
-    m_db->metadata()->setName("Save");
+    m_db->metadata()->setName("testDatabaseSettings");
     triggerAction("actionChangeDatabaseSettings");
-    QWidget* dbSettingsWidget = m_dbWidget->findChild<QWidget*>("databaseSettingsWidget");
-    QSpinBox* transformRoundsSpinBox = dbSettingsWidget->findChild<QSpinBox*>("transformRoundsSpinBox");
+    auto* dbSettingsWidget = m_dbWidget->findChild<QWidget*>("databaseSettingsWidget");
+    auto* transformRoundsSpinBox = dbSettingsWidget->findChild<QSpinBox*>("transformRoundsSpinBox");
+    auto advancedToggle = dbSettingsWidget->findChild<QCheckBox*>("advancedSettingsToggle");
+
+    advancedToggle->setChecked(true);
+    QApplication::processEvents();
+
     QVERIFY(transformRoundsSpinBox != nullptr);
     transformRoundsSpinBox->setValue(123456);
     QTest::keyClick(transformRoundsSpinBox, Qt::Key_Enter);
     // wait for modified timer
-    QTRY_COMPARE(m_tabWidget->tabText(m_tabWidget->currentIndex()), QString("Save*"));
+    QTRY_COMPARE(m_tabWidget->tabText(m_tabWidget->currentIndex()), QString("testDatabaseSettings*"));
     QCOMPARE(m_db->kdf()->rounds(), 123456);
 
     triggerAction("actionDatabaseSave");
-    QCOMPARE(m_tabWidget->tabText(m_tabWidget->currentIndex()), QString("Save"));
+    QCOMPARE(m_tabWidget->tabText(m_tabWidget->currentIndex()), QString("testDatabaseSettings"));
+
+    advancedToggle->setChecked(false);
+    QApplication::processEvents();
 
     checkDatabase();
 }
@@ -1021,8 +1103,8 @@ void TestGui::testKeePass1Import()
     fileDialog()->setNextFileName(QString(KEEPASSX_TEST_DATA_DIR).append("/basic.kdb"));
     triggerAction("actionImportKeePass1");
 
-    QWidget* keepass1OpenWidget = m_mainWindow->findChild<QWidget*>("keepass1OpenWidget");
-    QLineEdit* editPassword = keepass1OpenWidget->findChild<QLineEdit*>("editPassword");
+    auto* keepass1OpenWidget = m_mainWindow->findChild<QWidget*>("keepass1OpenWidget");
+    auto* editPassword = keepass1OpenWidget->findChild<QLineEdit*>("editPassword");
     QVERIFY(editPassword);
 
     QTest::keyClicks(editPassword, "masterpw");
@@ -1189,6 +1271,7 @@ void TestGui::triggerAction(const QString& name)
     QVERIFY(action);
     QVERIFY(action->isEnabled());
     action->trigger();
+    QApplication::processEvents();
 }
 
 void TestGui::dragAndDropGroup(const QModelIndex& sourceIndex,

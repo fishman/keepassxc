@@ -68,8 +68,8 @@ void NewDatabaseWizard::initializePage(int id)
     if (id == startId()) {
         m_db.reset(new Database());
         m_db->rootGroup()->setName(tr("Root", "Root group"));
-        m_db->setKdf(nullptr);
-        m_db->setKey(nullptr);
+        m_db->setKdf({});
+        m_db->setKey({});
     }
 
     m_pages[id]->setDatabase(m_db.data());

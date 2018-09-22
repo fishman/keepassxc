@@ -272,7 +272,7 @@ void Database::setCompressionAlgo(Database::CompressionAlgorithm algo)
 bool Database::setKey(QSharedPointer<const CompositeKey> key, bool updateChangedTime, bool updateTransformSalt)
 {
     if (!key) {
-        m_data.key = nullptr;
+        m_data.key.reset();
         m_data.transformedMasterKey = {};
         m_data.hasKey = false;
         return true;

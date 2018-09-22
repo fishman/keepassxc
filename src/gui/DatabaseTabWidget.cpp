@@ -88,12 +88,14 @@ void DatabaseTabWidget::toggleTabbar()
 
 void DatabaseTabWidget::newDatabase()
 {
-    NewDatabaseWizard wizard;
-    if (!wizard.exec()) {
+    // use QScopedPointer to ensure deletion after scope ends, but still parent
+    // it to this to make it modal and allow easier access in unit tests
+    QScopedPointer<NewDatabaseWizard> wizard(new NewDatabaseWizard(this));
+    if (!wizard->exec()) {
         return;
     }
 
-    auto* db = wizard.takeDatabase();
+    auto* db = wizard->takeDatabase();
     if (!db) {
         return;
     }
