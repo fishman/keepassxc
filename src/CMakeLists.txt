@@ -85,7 +85,6 @@ set(keepassx_SOURCES
     format/KeePass1Reader.cpp
     format/KeePass2.cpp
     format/KeePass2RandomStream.cpp
-    format/KeePass2Repair.cpp
     format/KdbxReader.cpp
     format/KdbxWriter.cpp
     format/KdbxXmlReader.cpp
@@ -103,7 +102,6 @@ set(keepassx_SOURCES
     gui/Clipboard.cpp
     gui/CloneDialog.cpp
     gui/DatabaseOpenWidget.cpp
-    gui/DatabaseRepairWidget.cpp
     gui/DatabaseSettingsWidget.cpp
     gui/DatabaseTabWidget.cpp
     gui/DatabaseWidget.cpp
