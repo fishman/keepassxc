@@ -120,7 +120,7 @@ public:
     bool changeKdf(QSharedPointer<Kdf> kdf);
 
     static Database* databaseByUuid(const QUuid& uuid);
-    static Database* openDatabaseFile(const QString& fileName, QSharedPointer<CompositeKey> key);
+    static Database* openDatabaseFile(const QString& fileName, QSharedPointer<const CompositeKey> key);
     static Database* unlockFromStdin(QString databaseFilename, QString keyFilename = QString(""));
 
 signals:

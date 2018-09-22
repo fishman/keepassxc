@@ -1174,8 +1174,8 @@ void TestGui::checkDatabase(QString dbFileName)
     if (dbFileName.isEmpty())
         dbFileName = m_dbFilePath;
 
-    CompositeKey key;
-    key.addKey(PasswordKey("a"));
+    auto key = QSharedPointer<CompositeKey>::create();
+    key->addKey(QSharedPointer<PasswordKey>::create("a"));
     KeePass2Reader reader;
     QScopedPointer<Database> dbSaved(reader.readDatabase(dbFileName, key));
     QVERIFY(dbSaved);

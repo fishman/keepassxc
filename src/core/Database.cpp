@@ -442,7 +442,7 @@ QSharedPointer<const CompositeKey> Database::key() const
     return m_data.key;
 }
 
-Database* Database::openDatabaseFile(const QString& fileName, QSharedPointer<CompositeKey> key)
+Database* Database::openDatabaseFile(const QString& fileName, QSharedPointer<const CompositeKey> key)
 {
 
     QFile dbFile(fileName);
@@ -614,6 +614,9 @@ bool Database::changeKdf(QSharedPointer<Kdf> kdf)
 {
     kdf->randomizeSeed();
     QByteArray transformedMasterKey;
+    if (!m_data.key) {
+        m_data.key = QSharedPointer<CompositeKey>::create();
+    }
     if (!m_data.key->transform(*kdf, transformedMasterKey)) {
         return false;
     }
